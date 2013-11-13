@@ -117,8 +117,14 @@ Open the specified device for use with successive commands.  Any previously open
 \par probe
 List attached bladeRF devices
 
-\par erase
-Erase part of FX3 flash device
+\par erase <offset> <count>
+Erase specified flash sectors
+
+\par backup <file> [<address> <length>]
+Backup a region of flash to a file
+
+\par restore <file> [<address> <length>]
+Restore a region of flash from a file
 
 \par version
 Host software and device version information
