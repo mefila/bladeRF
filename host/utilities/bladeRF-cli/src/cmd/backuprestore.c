@@ -47,12 +47,12 @@ static int parse_argv(struct cli_state *state, int argc, char **argv,
 {
     int rv;
 
-    if(argc < 2 || argc > 3)
+    if (argc < 2 || argc > 3)
         return CMD_RET_NARGS;
 
     opt->user_set_address = 0;
 
-    if(argc >= 2) {
+    if (argc >= 2) {
         if ((opt->file = interactive_expand_path(argv[1])) == NULL) {
             cli_err(state, argv[0], "Unable to expand file path: \"%s\"",
                     argv[1]);
@@ -63,23 +63,23 @@ static int parse_argv(struct cli_state *state, int argc, char **argv,
         opt->len = CAL_BUFFER_SIZE;
     }
 
-    if(argc == 3) {
+    if (argc == 3) {
         char *address, *len;
 
         address = strtok(argv[2], ",");
-        if(!address)
+        if (!address)
             return CMD_RET_INVPARAM;
 
         len = strtok(NULL, ",");
-        if(!len)
+        if (!len)
             return CMD_RET_INVPARAM;
 
         rv = sscanf(address, "0x%x", &opt->address);
-        if(rv < 1)
+        if (rv < 1)
             return CMD_RET_INVPARAM;
 
         rv = sscanf(len, "0x%x", &opt->len);
-        if(rv < 1)
+        if (rv < 1)
             return CMD_RET_INVPARAM;
 
         opt->user_set_address = 1;
@@ -101,38 +101,38 @@ int cmd_backup(struct cli_state *state, int argc, char **argv)
     struct options opt = { 0 };
 
     rv = parse_argv(state, argc, argv, &opt);
-    if(rv < 0)
+    if (rv < 0)
         return rv;
 
-    if(!state->dev) {
+    if (!state->dev) {
         rv = CMD_RET_NODEV;
-        goto out;
+        goto cmd_backup_out;
     }
 
     buf = malloc(opt.len);
 
     rv = bladerf_get_devinfo(state->dev, &info);
-    if(rv < 0) {
+    if (rv < 0) {
         rv_error(rv, "Getting device info failed!");
-        goto out;
+        goto cmd_backup_out;
     }
 
     rv = bladerf_read_flash_unaligned(state->dev,
                                       opt.address,
                                       (uint8_t*)buf,
                                       opt.len);
-    if(rv < 0) {
+    if (rv < 0) {
         rv_error(rv, "Reading flash data failed!");
-        goto out;
+        goto cmd_backup_out;
     }
 
     rv = bladerf_image_fill(&img,
                             BLADERF_IMAGE_TYPE_RAW,
                             buf,
                             opt.len);
-    if(rv < 0) {
+    if (rv < 0) {
         rv_error(rv, "Initializing flash image failed!");
-        goto out;
+        goto cmd_backup_out;
     }
 
     uint32_t address_be = HOST_TO_BE32(opt.address);
@@ -140,31 +140,31 @@ int cmd_backup(struct cli_state *state, int argc, char **argv)
                                 BLADERF_IMAGE_META_ADDRESS,
                                 (void*) &address_be,
                                 sizeof(address_be));
-    if(rv < 0) {
+    if (rv < 0) {
         rv_error(rv, "Adding metadata (address) falied!");
-        goto out;
+        goto cmd_backup_out;
     }
 
     rv = bladerf_image_meta_add(&img.meta,
                                 BLADERF_IMAGE_META_SERIAL,
                                 (void*) info.serial,
                                 sizeof(info.serial));
-    if(rv < 0) {
+    if (rv < 0) {
         rv_error(rv, "Adding metadata (serial) falied!");
-        goto out;
+        goto cmd_backup_out;
     }
 
 
     rv = bladerf_image_write(&img, opt.file);
-    if(rv < 0) {
+    if (rv < 0) {
         rv_error(rv, "Writing flash image to file failed!");
-        goto out;
+        goto cmd_backup_out;
     }
 
     rv = CMD_RET_OK;
 
-out:
-    if(buf)
+cmd_backup_out:
+    if (buf)
         free(buf);
 
     return rv;
@@ -176,13 +176,13 @@ static ssize_t metadata_get(struct cli_state *state,
 {
     int rv;
 
-    if(!opt->user_set_address) {
+    if (!opt->user_set_address) {
         uint32_t address_be;
         rv = bladerf_image_meta_get(&img->meta,
                                     BLADERF_IMAGE_META_ADDRESS,
                                     (void*) &address_be,
                                     sizeof(address_be));
-        if(rv < 0)
+        if (rv < 0)
             return rv;
 
         opt->address = BE32_TO_HOST(address_be);
@@ -201,52 +201,52 @@ int cmd_restore(struct cli_state *state, int argc, char **argv)
     struct options opt = { 0 };
 
     rv = parse_argv(state, argc, argv, &opt);
-    if(rv < 0)
+    if (rv < 0)
         return rv;
 
-    if(!state->dev) {
+    if (!state->dev) {
         rv = CMD_RET_NODEV;
-        goto out;
+        goto cmd_restore_out;
     }
 
     rv = bladerf_get_devinfo(state->dev, &info);
-    if(rv < 0) {
+    if (rv < 0) {
         rv_error(rv, "Getting device info failed!");
-        goto out;
+        goto cmd_restore_out;
     }
 
     rv = bladerf_image_read(&img, opt.file);
-    if(rv < 0) {
+    if (rv < 0) {
         rv_error(rv, "Reading flash image from file failed!");
-        goto out;
+        goto cmd_restore_out;
     }
 
     rv = metadata_get(state, &opt, &img);
-    if(rv < 0) {
+    if (rv < 0) {
         rv_error(rv, "Parsing image metadata failed!");
-        goto out;
+        goto cmd_restore_out;
     }
 
     rv = bladerf_program_flash_unaligned(state->dev,
                                        opt.address,
                                        (uint8_t*)img.data,
                                        uint_min(img.len, opt.len));
-    if(rv < 0) {
+    if (rv < 0) {
         cli_err(state, argv[0],
-"Restoring flash region failed!\n"
-"\n"
-"This is Pretty Bad^{TM} you should reflash the FX3 image just to be\n"
-"sure it didn't get damaged.\n"
-"\n"
-"See: https://github.com/Nuand/bladeRF/wiki/Upgrading-bladeRF-firmware\n"
+        "Failed to restore calibration region.\n"
+        "\n"
+        "Flash contents may be corrupted. If the device fails to boot\n"
+        "at successive power-ons, see the following wiki page for recovery\n"
+        "instructions:"
+        "  https://github.com/Nuand/bladeRF/wiki/Upgrading-bladeRF-firmware\n"
         );
-        goto out;
+        goto cmd_restore_out;
     }
 
     rv = CMD_RET_OK;
 
-out:
-    if(buf)
+cmd_restore_out:
+    if (buf)
         free(buf);
 
     return rv;
