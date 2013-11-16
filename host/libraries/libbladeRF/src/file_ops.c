@@ -31,7 +31,7 @@
 #include "file_ops.h"
 #include "log.h"
 
-int file_write(FILE *f, char *buf, size_t len)
+int file_write(FILE *f, uint8_t *buf, size_t len)
 {
     size_t rv;
 

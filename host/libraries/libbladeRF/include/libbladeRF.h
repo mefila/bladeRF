@@ -921,7 +921,9 @@ API_EXPORT bladerf_dev_speed bladerf_device_speed(struct bladerf *dev);
 
 
 /**
- * @defgroup FN_PROG    Device loading and programming
+ * @defgroup FN_PROG  Device loading and programming
+ *
+ * @{
  */
 
 /**
@@ -1134,14 +1136,14 @@ typedef enum {
     BLADERF_IMAGE_TYPE_RAW,             /** Misc. raw data */
     BLADERF_IMAGE_TYPE_FIRMWARE,        /** Firmware data */
     BLADERF_IMAGE_TYPE_FPGA_40KLE,      /** FPGA bitstream for 40 KLE device */
-    BLADERF_IMAGE_TYPE_FPGA_160KLE,     /** FPGA bitstream for 160 KLE device */
+    BLADERF_IMAGE_TYPE_FPGA_115KLE,     /** FPGA bitstream for 160 KLE device */
     BLADERF_IMAGE_TYPE_CALIBRATION,     /** Calibration data */
 } bladerf_image_type;
 
 /**
  * Size of the magic signature at the beginning of bladeRF image files
  */
-#define BLADERF_IMAGE_MAGIC_LEN 16
+#define BLADERF_IMAGE_MAGIC_LEN 7
 
 /**
  * Size of bladeRF flash image checksum
@@ -1185,8 +1187,8 @@ struct bladerf_image {
      */
     struct bladerf_version version;
 
-    /** TODO timestamp */
-    /*uint64_t timestamp; */
+    /** UTC image timestamp, in seconds since the Unix Epoch */
+    uint64_t timestamp;
 
     /**
      * Serial number of the device that the image was obtained from. This
@@ -1210,7 +1212,7 @@ struct bladerf_image {
 
     /**
      * Address of the flash data in this image. A value of 0xffffffff
-     * implies that this field is left unspecified.
+     * implies that this field is left unspecified (i.e., "don't care").
      */
     uint32_t address;
 
@@ -1222,64 +1224,73 @@ struct bladerf_image {
 };
 
 /**
- * Initialize an image structure. Use this function in conjunction with
- * bladerf_image_write().
+ * Allocate and initialize an image structure.
  *
- * This function populates the `magic`, `version`, address, and type
- * fields, zeros out the `serial` and `sha256` fields, and allocates the `data`
- * field on the heap.
+ * This following bladerf_image fields are populated: `magic`, `version`,
+ * `timestamp`, `type`, `address`, and `length`
  *
- * @note The caller is responsible for freeing the `data` field, and populating
- *       the `serial` field, if desired.
+ * The following bladerf_image fields are zeroed out:  `checksum`, `serial`, and
+ * `reserved`,
  *
- * @return  0 on success, BLADERF_ERR_MEM upon memory allocation failure(s).
+ * If the `length` parameter is not 0, the bladerf_image `data` field will be
+ * dynamically allocated. Otherwise, `data` will be set to NULL.
+ *
+ * @note A non-zero `len` should be use only with bladerf_image_write();
+ * bladerf_image_read() allocates and sets `data` based upon size of the image
+ * contents, and does not attempt to free() the `data` field before setting it.
+ *
+ * @return Pointer to allocated and initialized structure on success,
+ *         NULL on failure
  */
-int bladerf_image_init(struct bladerf_image *img,
-                       bladerf_image_type type,
-                       uint32_t address,
-                       size_t data_len);
+API_EXPORT struct bladerf_image * bladerf_alloc_image(bladerf_image_type type,
+                                                      uint32_t address,
+                                                      size_t length);
+
 
 /**
- * Write a flash image to a file. This function will fill in the checksum field
- * before writing the contents to the specified file.
+ * Free a bladerf_image previously obtained via bladerf_alloc_image.
+ * If the bladerf_image's `data` field is non-NULL, it will be freed.
+ */
+API_EXPORT void bladerf_free_image(struct bladerf_image *image);
+
+
+/**
+ * Write a flash image to a file.
  *
- * @pre     img     Has been initialized using bladerf_image_init()
- * @post    img->checksum will be populated if this function succeeds
+ * This function will fill in the checksum field before writing the contents to
+ * the specified file. The user-supplied contents of this field are ignored.
  *
- * @param[in]    img         Flash image
+ * @pre   `image` has been initialized using bladerf_image_init()
+ * @post `image->checksum` will be populated if this function succeeds
+ *
+ * @param[in]    image       Flash image
  * @param[in]    file        File to write the flash image to
  *
  * @return 0 upon success, or a value from \ref RETCODES list on failure
  */
-API_EXPORT int bladerf_image_write(struct bladerf_image *img,
+API_EXPORT int bladerf_image_write(struct bladerf_image *image,
                                    const char *file);
 
 /**
  * Read flash image from a file.
  *
- * @note There is no need to call bladerf_image_init() prior to this call. This
- *       would actually result in a memory leak, as this function makes no
- *       attempt to free() img->data prior to writing it.
- *
- * @param[out]   img        Flash image structure to populate.
- *
- *                          On success, the data field will be populated with
- *                          a heap-allocated pointer that the caller is
- *                          responsible for freeing.
- *
- *                          The contents of this structure may be partially
- *                          modified if a failure occurs; all data should
- *                          be considered invalid.
+ * @param[out]   image      Flash image structure to populate.
  *
  * @param[in]    file       File to read image from.
  *
- * @return 0 upon success,
- *         BLADERF_ERR_CHECKSUM upon detecting a checksum mismatch,
- *         BLADERF_ERR_INVAL if any image fields are invalid,
- *         BLADERF_ERR_IO on a file I/O error,
- *         value from \ref RETCODES list on any other failure
+ * @pre  The `image` parameter has been obtained via a call to
+ *       bladerf_alloc_image(), with a `length` of 0.
+ *
+ * @note The contents of the `image` paramater should not be used if this
+ *       function fails.
+ *
+ * @return 0 upon success,<br>
+ *         BLADERF_ERR_CHECKSUM upon detecting a checksum mismatch,<br>
+ *         BLADERF_ERR_INVAL if any image fields are invalid,<br>
+ *         BLADERF_ERR_IO on a file I/O error,<br>
+ *         or a value from \ref RETCODES list on any other failure<br>
  */
-API_EXPORT int bladerf_image_read(struct bladerf_image *img,
+API_EXPORT int bladerf_image_read(struct bladerf_image *image,
                                   const char *file);
 
 /**
