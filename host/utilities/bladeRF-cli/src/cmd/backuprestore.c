@@ -2,6 +2,7 @@
  * This file is part of the bladeRF project
  *
  * Copyright (C) 2013  Daniel Gröber <dxld AT darkboxed DOT org>
+ * Copyright (C) 2013  Nuand, LLC.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,18 +18,18 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
-#include "cmd.h"
-#include "interactive.h"
-#include <minmax.h>
-
-#include <libbladeRF.h>
-#include <bladeRF.h>
-
 #include <stdio.h>
 #include <limits.h>
 #include <string.h>
 #include <stdlib.h>
 
+#include <libbladeRF.h>
+#include <bladeRF.h>
+
+#include "cmd.h"
+#include "interactive.h"
+#include "minmax.h"
+#include "conversions.h"
 
 #define rv_error(rv, ...) do {                              \
         state->last_lib_error = (rv);                       \
@@ -39,18 +40,16 @@
 struct options {
     char *file;
     uint32_t address, len;
-    int user_set_address;
+    bool override_defaults;
 };
 
 static int parse_argv(struct cli_state *state, int argc, char **argv,
                       struct options *opt)
 {
-    int rv;
+    bool ok;
 
-    if (argc < 2 || argc > 3)
+    if (argc != 2 && argc != 4)
         return CMD_RET_NARGS;
-
-    opt->user_set_address = 0;
 
     if (argc >= 2) {
         if ((opt->file = interactive_expand_path(argv[1])) == NULL) {
@@ -61,32 +60,23 @@ static int parse_argv(struct cli_state *state, int argc, char **argv,
 
         opt->address = CAL_PAGE;
         opt->len = CAL_BUFFER_SIZE;
+        opt->override_defaults = false;
     }
 
-    if (argc == 3) {
-        char *address, *len;
-
-        address = strtok(argv[2], ",");
-        if (!address)
+    if (argc == 4) {
+        opt->address = str2uint(argv[2], 0, UINT_MAX, &ok);
+        if (!ok) {
+            cli_err(state, argv[0], "Invalid address provided");
             return CMD_RET_INVPARAM;
+        }
 
-        len = strtok(NULL, ",");
-        if (!len)
+        opt->len = str2uint(argv[3], 0, UINT_MAX, &ok);
+        if (!ok) {
+            cli_err(state, argv[0], "Invalid length provided");
             return CMD_RET_INVPARAM;
+        }
 
-        rv = sscanf(address, "0x%x", &opt->address);
-        if (rv < 1)
-            return CMD_RET_INVPARAM;
-
-        rv = sscanf(len, "0x%x", &opt->len);
-        if (rv < 1)
-            return CMD_RET_INVPARAM;
-
-        opt->user_set_address = 1;
-    }
-
-    if (!cli_device_is_opened(state)) {
-        return CMD_RET_NODEV;
+        opt->override_defaults = true;
     }
 
     return 0;
@@ -95,110 +85,73 @@ static int parse_argv(struct cli_state *state, int argc, char **argv,
 int cmd_backup(struct cli_state *state, int argc, char **argv)
 {
     int rv;
-    char *buf = NULL;
     struct bladerf_devinfo info;
-    struct bladerf_image img;
-    struct options opt = { 0 };
+    struct bladerf_image *image = NULL;
+    bladerf_image_type image_type;
+    struct options opt;
 
-    rv = parse_argv(state, argc, argv, &opt);
-    if (rv < 0)
-        return rv;
+    memset(&opt, 0, sizeof(opt));
 
-    if (!state->dev) {
+    if (!cli_device_is_opened(state)) {
         rv = CMD_RET_NODEV;
         goto cmd_backup_out;
     }
 
-    buf = malloc(opt.len);
+    rv = parse_argv(state, argc, argv, &opt);
+    if (rv < 0) {
+        return rv;
+    }
+
+    image_type = opt.override_defaults ? BLADERF_IMAGE_TYPE_RAW :
+                                         BLADERF_IMAGE_TYPE_CALIBRATION;
+
+    image = bladerf_alloc_image(image_type, opt.address, opt.len);
+    if (!image) {
+        return CMD_RET_MEM;
+    }
 
     rv = bladerf_get_devinfo(state->dev, &info);
     if (rv < 0) {
-        rv_error(rv, "Getting device info failed!");
+        rv_error(rv, "Failed to get serial number");
         goto cmd_backup_out;
     }
 
-    rv = bladerf_read_flash_unaligned(state->dev,
-                                      opt.address,
-                                      (uint8_t*)buf,
-                                      opt.len);
+    strncpy(image->serial, info.serial, BLADERF_SERIAL_LENGTH);
+
+    rv = bladerf_read_flash_unaligned(state->dev, opt.address,
+                                      image->data, opt.len);
+
     if (rv < 0) {
-        rv_error(rv, "Reading flash data failed!");
+        rv_error(rv, "Failed to read flash region");
         goto cmd_backup_out;
     }
 
-    rv = bladerf_image_fill(&img,
-                            BLADERF_IMAGE_TYPE_RAW,
-                            buf,
-                            opt.len);
+    rv = bladerf_image_write(image, opt.file);
     if (rv < 0) {
-        rv_error(rv, "Initializing flash image failed!");
-        goto cmd_backup_out;
-    }
-
-    uint32_t address_be = HOST_TO_BE32(opt.address);
-    rv = bladerf_image_meta_add(&img.meta,
-                                BLADERF_IMAGE_META_ADDRESS,
-                                (void*) &address_be,
-                                sizeof(address_be));
-    if (rv < 0) {
-        rv_error(rv, "Adding metadata (address) falied!");
-        goto cmd_backup_out;
-    }
-
-    rv = bladerf_image_meta_add(&img.meta,
-                                BLADERF_IMAGE_META_SERIAL,
-                                (void*) info.serial,
-                                sizeof(info.serial));
-    if (rv < 0) {
-        rv_error(rv, "Adding metadata (serial) falied!");
-        goto cmd_backup_out;
-    }
-
-
-    rv = bladerf_image_write(&img, opt.file);
-    if (rv < 0) {
-        rv_error(rv, "Writing flash image to file failed!");
+        rv_error(rv, "Failed to write image file.");
         goto cmd_backup_out;
     }
 
     rv = CMD_RET_OK;
 
 cmd_backup_out:
-    if (buf)
-        free(buf);
-
-    return rv;
-}
-
-static ssize_t metadata_get(struct cli_state *state,
-                            struct options *opt,
-                            struct bladerf_image *img)
-{
-    int rv;
-
-    if (!opt->user_set_address) {
-        uint32_t address_be;
-        rv = bladerf_image_meta_get(&img->meta,
-                                    BLADERF_IMAGE_META_ADDRESS,
-                                    (void*) &address_be,
-                                    sizeof(address_be));
-        if (rv < 0)
-            return rv;
-
-        opt->address = BE32_TO_HOST(address_be);
-        opt->len = img->len;
+    if (image) {
+        bladerf_free_image(image);
     }
 
-    return CMD_RET_OK;
+    if (opt.file) {
+        free(opt.file);
+    }
+
+    return rv;
 }
 
 int cmd_restore(struct cli_state *state, int argc, char **argv)
 {
     int rv;
-    char *buf = NULL;
-    struct bladerf_devinfo info;
-    struct bladerf_image img;
-    struct options opt = { 0 };
+    struct bladerf_image *image = NULL;
+    struct options opt;
+    uint32_t addr, len;
 
     rv = parse_argv(state, argc, argv, &opt);
     if (rv < 0)
@@ -209,36 +162,41 @@ int cmd_restore(struct cli_state *state, int argc, char **argv)
         goto cmd_restore_out;
     }
 
-    rv = bladerf_get_devinfo(state->dev, &info);
-    if (rv < 0) {
-        rv_error(rv, "Getting device info failed!");
+    image = bladerf_alloc_image(BLADERF_IMAGE_TYPE_UNKNOWN, 0, 0);
+    if (!image) {
+        rv = CMD_RET_MEM;
         goto cmd_restore_out;
     }
 
-    rv = bladerf_image_read(&img, opt.file);
+    rv = bladerf_image_read(image, opt.file);
     if (rv < 0) {
-        rv_error(rv, "Reading flash image from file failed!");
+        rv_error(rv, "Failed to read flash image from file.");
         goto cmd_restore_out;
     }
 
-    rv = metadata_get(state, &opt, &img);
-    if (rv < 0) {
-        rv_error(rv, "Parsing image metadata failed!");
-        goto cmd_restore_out;
+    if (opt.override_defaults) {
+        addr = opt.address;
+        len = min_sz(opt.len, image->length);
+
+        if (len < opt.len) {
+            printf("  Warning: Reduced length because only %u bytes are in "
+                   "the image.\n", opt.len);
+        }
+
+    } else {
+        addr = image->address;
+        len = image->length;
     }
 
-    rv = bladerf_program_flash_unaligned(state->dev,
-                                       opt.address,
-                                       (uint8_t*)img.data,
-                                       uint_min(img.len, opt.len));
+    rv = bladerf_program_flash_unaligned(state->dev, addr, image->data, len);
     if (rv < 0) {
         cli_err(state, argv[0],
-        "Failed to restore calibration region.\n"
+        "Failed to restore flash region.\n"
         "\n"
         "Flash contents may be corrupted. If the device fails to boot\n"
         "at successive power-ons, see the following wiki page for recovery\n"
         "instructions:"
-        "  https://github.com/Nuand/bladeRF/wiki/Upgrading-bladeRF-firmware\n"
+        "  https://github.com/Nuand/bladeRF/wiki/Upgrading-bladeRF-firmware"
         );
         goto cmd_restore_out;
     }
@@ -246,8 +204,6 @@ int cmd_restore(struct cli_state *state, int argc, char **argv)
     rv = CMD_RET_OK;
 
 cmd_restore_out:
-    if (buf)
-        free(buf);
-
+    bladerf_free_image(image);
     return rv;
 }

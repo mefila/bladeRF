@@ -1108,7 +1108,7 @@ API_EXPORT int bladerf_write_flash(struct bladerf *dev,
  *
  * @param   dev   Device handle
  * @param   addr  Unaligned byte address of destination
- * @param   pbuf  Data to write to flash
+ * @param   buf   Data to write to flash
  * @param   len   Number of bytes to write. (No alignment requirement)
  *
  * @return Positive number of bytes written on success, negative value from \ref
@@ -1116,7 +1116,7 @@ API_EXPORT int bladerf_write_flash(struct bladerf *dev,
  */
 API_EXPORT int bladerf_program_flash_unaligned(struct bladerf *dev,
                                                uint32_t addr,
-                                               uint8_t *pbuf,
+                                               uint8_t *buf,
                                                uint32_t len);
 
 /* @} (End of FN_FLASH) */
@@ -1235,9 +1235,12 @@ struct bladerf_image {
  * If the `length` parameter is not 0, the bladerf_image `data` field will be
  * dynamically allocated. Otherwise, `data` will be set to NULL.
  *
- * @note A non-zero `len` should be use only with bladerf_image_write();
+ * @note A non-zero `lenth` should be use only with bladerf_image_write();
  * bladerf_image_read() allocates and sets `data` based upon size of the image
  * contents, and does not attempt to free() the `data` field before setting it.
+ *
+ * The `address` and `length` fields should be set 0 when reading an image from
+ * a file.
  *
  * @return Pointer to allocated and initialized structure on success,
  *         NULL on failure
@@ -1281,8 +1284,12 @@ API_EXPORT int bladerf_image_write(struct bladerf_image *image,
  * @pre  The `image` parameter has been obtained via a call to
  *       bladerf_alloc_image(), with a `length` of 0.
  *
+ * @post The `image` fields will be populated upon success, overwriting
+ *       any previous values.
+ *
  * @note The contents of the `image` paramater should not be used if this
  *       function fails.
+ *
  *
  * @return 0 upon success,<br>
  *         BLADERF_ERR_CHECKSUM upon detecting a checksum mismatch,<br>
