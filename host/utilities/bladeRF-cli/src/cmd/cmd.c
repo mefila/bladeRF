@@ -91,13 +91,29 @@ static const struct cmd cmd_table[] = {
         FIELD_INIT(.names, cmd_names_backup),
         FIELD_INIT(.exec, cmd_backup),
         FIELD_INIT(.desc, "Back up flash data to a file with metadata."),
-        FIELD_INIT(.help, "backup <file> [<address> <length>]\n"
+        FIELD_INIT(.help, "backup <file> (<type> | <address> <length>)\n"
             "\n"
-            "Back up flash data to the specified file.\n"
+            "Back up flash data to the specified file. This command takes either two or\n"
+            "four arguments. The two-argument invocation is generally recommended for\n"
+            "non-development use.\n"
             "\n"
-            "Optional parameters:\n"
-            "   <address>   Defaults to the address of the calibration data region.\n"
-            "   <len>       Defaults to the size of the calibration data region (256 bytes).\n"
+            "Parameters:\n"
+            "   <type>      Type of backup. This selects the appropriate address and length\n"
+            "               values based upon the selected type. Valid values are:\n"
+            "                   cal     - Calibration data\n"
+            "                   fw      - Firmware\n"
+            "                   fpga70  - Metadata and bitstream for a 70 kLE FPGA\n"
+            "                   fpga115 - Metadata and bitstream for a 115 kLE FPGA\n"
+            "\n"
+            "   <address>   Address of data to back up.\n"
+            "   <len>       Length of region to back up.\n"
+            "\n"
+            "Note: When an address and length are provided, the image type will default to \"raw\".\n"
+            "\n"
+            "Examples:\n"
+            "  backup cal.bin cal                   Back up the calibration data region.\n"
+            "  backup cal_raw.bin 0x30000 0x100     Back up the calibration region as\n"
+            "                                       a raw data image.\n"
             ),
     },
     {

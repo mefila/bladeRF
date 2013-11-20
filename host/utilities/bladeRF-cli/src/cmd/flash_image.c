@@ -70,8 +70,10 @@ static int handle_param(const char *param, char *val,
                 }
             }
         }
+
         if (status != 0) {
-            cli_err(s, argv0, "Serial number must be %d hexadecimal digits.");
+            cli_err(s, argv0, "Serial number must be %d hexadecimal digits.",
+                    BLADERF_SERIAL_LENGTH);
         }
     } else if (!strcasecmp("timestamp", param)) {
         p->timestamp = str2uint64(val, 0, UINT64_MAX, &ok);
@@ -167,14 +169,16 @@ int parse_cmdline(int argc, char **argv, struct params *p, struct cli_state *s)
         }
     }
 
-    if (!p->img_file) {
-        cli_err(s, argv[0], "An image file parameter is required.\n");
-        status = CMD_RET_INVPARAM;
-    } else if (p->type == BLADERF_IMAGE_TYPE_RAW &&
-               !(p->override_address || p->override_length)) {
-        cli_err(s, argv[0],
-                "An address and a length are required for type=raw.\n");
-        status = CMD_RET_INVPARAM;
+    if (status == 0) {
+        if (!p->img_file) {
+            cli_err(s, argv[0], "An image file parameter is required.");
+            status = CMD_RET_INVPARAM;
+        } else if (p->type == BLADERF_IMAGE_TYPE_RAW &&
+                !(p->override_address || p->override_length)) {
+            cli_err(s, argv[0],
+                    "An address and a length are required for type=raw.");
+            status = CMD_RET_INVPARAM;
+        }
     }
 
     return status;
