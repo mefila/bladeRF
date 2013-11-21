@@ -89,6 +89,8 @@ int cmd_restore(struct cli_state *state, int argc, char **argv)
     struct options opt;
     uint32_t addr, len;
 
+    memset(&opt, 0, sizeof(opt));
+
     rv = parse_argv(state, argc, argv, &opt);
     if (rv < 0)
         return rv;
@@ -139,6 +141,7 @@ int cmd_restore(struct cli_state *state, int argc, char **argv)
     rv = CMD_RET_OK;
 
 cmd_restore_out:
+    free(opt.file);
     bladerf_free_image(image);
     return rv;
 }
