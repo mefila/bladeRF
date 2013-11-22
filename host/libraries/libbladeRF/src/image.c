@@ -27,9 +27,10 @@
 #include <limits.h>
 #include <errno.h>
 
+#include "libbladeRF.h"
+#include "bladerf_priv.h"
 #include "host_config.h"
 #include "sha256.h"
-#include "libbladeRF.h"
 #include "log.h"
 #include "minmax.h"
 #include "file_ops.h"
@@ -390,6 +391,63 @@ struct bladerf_image * bladerf_alloc_image(bladerf_image_type type,
     image->address = address;
     image->length = length;
     image->type = type;
+
+    return image;
+}
+
+
+static int make_cal_region(bladerf_fpga_size size, uint16_t vctcxo_trim,
+                           uint8_t *buf, size_t len)
+{
+    int rv;
+    static const char fpga_size_40[] = "40";
+    static const char fpga_size_115[] = "115";
+    const char *fpga_size;
+    char dac[7] = {0};
+
+    if (size == BLADERF_FPGA_40KLE) {
+        fpga_size = fpga_size_40;
+    } else if (size == BLADERF_FPGA_115KLE) {
+        fpga_size = fpga_size_115;
+    } else {
+        assert(0); /* Bug catcher */
+    }
+
+    rv = add_field((char*)buf, len, "B", fpga_size);
+    if (rv < 0) {
+        return rv;
+    }
+
+    sprintf(dac, "%u", vctcxo_trim);
+    rv = add_field((char*)buf, len, "DAC", dac);
+    if (rv < 0) {
+        return rv;
+    }
+
+    return 0;
+}
+
+struct bladerf_image * bladerf_alloc_cal_image(bladerf_fpga_size fpga_size,
+                                               uint16_t vctcxo_trim)
+{
+    struct bladerf_image *image;
+    int status;
+
+    image = bladerf_alloc_image(BLADERF_IMAGE_TYPE_CALIBRATION,
+                                BLADERF_FLASH_ADDR_CALIBRATION,
+                                BLADERF_FLASH_LEN_CALIBRATION);
+
+    if (!image) {
+        return NULL;
+    }
+
+    status = make_cal_region(fpga_size, vctcxo_trim,
+                             image->data, image->length);
+
+    if (status != 0) {
+        bladerf_free_image(image);
+        image = NULL;
+    }
 
     return image;
 }

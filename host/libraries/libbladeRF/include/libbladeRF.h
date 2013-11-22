@@ -1032,10 +1032,10 @@ extern const unsigned int BLADERF_FLASH_ALIGNMENT_SECTOR;
 #define BLADERF_FLASH_LEN_FIRMWARE      0x00030000
 
 /** Address of calibration data in flash */
-#define BLADERF_FLASH_ADDR_CAL          0x00030000
+#define BLADERF_FLASH_ADDR_CALIBRATION  0x00030000
 
 /** Length of calibration data region */
-#define BLADERF_FLASH_LEN_CAL           0x100
+#define BLADERF_FLASH_LEN_CALIBRATION   0x100
 
 /** Address of FPGA metadata */
 #define BLADERF_FLASH_ADDR_FPGA_META    0x00040000
@@ -1160,7 +1160,7 @@ typedef enum {
     BLADERF_IMAGE_TYPE_RAW,             /** Misc. raw data */
     BLADERF_IMAGE_TYPE_FIRMWARE,        /** Firmware data */
     BLADERF_IMAGE_TYPE_FPGA_40KLE,      /** FPGA bitstream for 40 KLE device */
-    BLADERF_IMAGE_TYPE_FPGA_115KLE,     /** FPGA bitstream for 160 KLE device */
+    BLADERF_IMAGE_TYPE_FPGA_115KLE,     /** FPGA bitstream for 115  KLE device */
     BLADERF_IMAGE_TYPE_CALIBRATION,     /** Calibration data */
 } bladerf_image_type;
 
@@ -1267,12 +1267,25 @@ struct bladerf_image {
  * a file.
  *
  * @return Pointer to allocated and initialized structure on success,
- *         NULL on failure
+ *         NULL on memory allocation failure
  */
 API_EXPORT struct bladerf_image * bladerf_alloc_image(bladerf_image_type type,
                                                       uint32_t address,
                                                       size_t length);
 
+/**
+ * Create a flash image initialized to contain a calibration data region.
+ * This is intended to be used in conjunction with bladerf_write_image(),
+ * or a write of the image's `data` field to flash.
+ *
+ * @param   fpga_size    Target FPGA size
+ * @param   vctcxo_trim  VCTCXO oscillator trim value.
+ *
+ * @return Pointer to allocated and initialized structure on success,
+ *         NULL on memory allocation failure
+ */
+API_EXPORT struct bladerf_image * bladerf_alloc_cal_image(bladerf_fpga_size fpga_size,
+                                                          uint16_t vctcxo_trim);
 
 /**
  * Free a bladerf_image previously obtained via bladerf_alloc_image.
@@ -1323,23 +1336,6 @@ API_EXPORT int bladerf_image_write(struct bladerf_image *image,
  */
 API_EXPORT int bladerf_image_read(struct bladerf_image *image,
                                   const char *file);
-
-/**
- * Create new calibration region data. This is intended to be used in
- * conjunction with bladerf_image_write().
- *
- * @param   fpga_size    Either "40" or "115" for x40 and x115 FPGA variant,
- *                       respectively
- * @param   vctcxo_trim  VCTCXO oscillator trim value.
- * @param   buf          Buffer to fill with the new calibration data
- * @param   len          Size of `buf' in bytes
- *
- * @return 0 on success, negative value from \ref RETCODES list on failure
- */
-API_EXPORT int bladerf_make_cal_region(char *fpga_size,
-                                       uint16_t vctcxo_trim,
-                                       char* buf, size_t len);
-
 
 /** @} (End of FN_IMAGE) */
 

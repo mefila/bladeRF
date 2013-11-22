@@ -191,7 +191,7 @@ int encode_field(char *ptr, int len, int *idx,
     return 0;
 }
 
-int add_field(char *buf, int buf_len, const char *field_name, char *val)
+int add_field(char *buf, int buf_len, const char *field_name, const char *val)
 {
     /* skip to the end, ignoring crc (don't want to further corrupt partially
      * corrupt data) */

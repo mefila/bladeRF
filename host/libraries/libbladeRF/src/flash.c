@@ -183,26 +183,3 @@ out:
 
     return rv;
 }
-
-int bladerf_make_cal_region(char *fpga_size,
-                            uint16_t vctcxo_trim,
-                            char* buf, size_t len)
-{
-    int rv;
-    char dac[7] = {0};
-
-    assert(len >= BLADERF_FLASH_PAGE_SIZE);
-
-    memset(buf, 0xff, len);
-
-    rv = add_field(buf, len, "B", fpga_size);
-    if(rv < 0)
-        return rv;
-
-    sprintf(dac, "%u", vctcxo_trim);
-    add_field(buf, len, "DAC", dac);
-    if(rv < 0)
-        return rv;
-
-    return 0;
-}

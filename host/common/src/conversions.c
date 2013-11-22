@@ -264,6 +264,7 @@ static int append_char(char **arg, int *arg_size, int *arg_i, char c)
         if (!tmp) {
             return -1;
         } else {
+            memset(tmp + *arg_size, 0, *arg_size);
             *arg = tmp;
             *arg_size = *arg_size * 2;
         }
