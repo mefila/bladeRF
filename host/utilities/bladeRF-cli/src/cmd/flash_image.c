@@ -242,6 +242,9 @@ static int print_image_metadata(struct cli_state *s, struct params *p,
             cli_err(s, argv0, "Image contains invalid fields or data.");
             status = CMD_RET_INVPARAM;
         }
+
+        s->last_lib_error = status;
+        status = CMD_RET_LIBBLADERF;
     }
 
     bladerf_free_image(image);
