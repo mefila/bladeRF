@@ -205,9 +205,11 @@ static int print_image_metadata(struct cli_state *s, struct params *p,
                image->version.minor, image->version.patch);
 
         time_tmp = image->timestamp;
+        printf("Timestamp (raw): %lld\n", time_tmp);
         timeval = localtime(&time_tmp);
+        printf("Time ptr: %p\n", timeval);
         memset(datetime, 0, sizeof(datetime));
-        strftime(datetime, sizeof(datetime) - 1, "%F %T", timeval);
+        strftime(datetime, sizeof(datetime) - 1, "%Y-%m-%d %H:%M:%S", timeval);
         printf("Timestamp: %s\n", datetime);
 
         switch (image->type) {
@@ -271,7 +273,7 @@ static int write_image(struct cli_state *s, struct params *p, const char *argv0)
         goto write_image_out;
     }
 
-    if (data_size > p->max_length) {
+    if ((uint32_t)data_size > p->max_length) {
         status = CMD_RET_INVPARAM;
         cli_err(s, argv0, "The provided data file is too large for the specified flash region.");
         goto write_image_out;

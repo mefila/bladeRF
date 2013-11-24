@@ -1271,7 +1271,7 @@ struct bladerf_image {
  */
 API_EXPORT struct bladerf_image * bladerf_alloc_image(bladerf_image_type type,
                                                       uint32_t address,
-                                                      size_t length);
+                                                      uint32_t length);
 
 /**
  * Create a flash image initialized to contain a calibration data region.
